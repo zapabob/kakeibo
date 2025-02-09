@@ -15,8 +15,6 @@
 8. CSVエクスポート機能 (新規追加)
 """
 
-import tkinter as tk
-from tkinter import messagebox, filedialog
 import sqlite3
 import logging
 import schedule
@@ -28,6 +26,12 @@ import re
 import os
 import shutil
 import sys
+from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget,
+    QFileDialog, QMessageBox
+)
 
 # -------------------------------------------------------------------
 # 1. ログ設定
@@ -72,7 +76,7 @@ def initialize_database():
         logging.info("データベース初期化完了")
     except sqlite3.Error as e:
         logging.error("DB初期化エラー: %s", e)
-        messagebox.showerror("エラー", "データベースの初期化に失敗しました。")
+        QMessageBox.critical(None, "エラー", "データベースの初期化に失敗しました。")
     finally:
         if conn:
             conn.close()
@@ -87,12 +91,12 @@ def validate_input(date_str, amount_str):
     - 金額は数値変換できるか
     """
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
-        messagebox.showwarning("入力エラー", "日付はYYYY-MM-DD形式で入力してください。")
+        QMessageBox.warning(None, "入力エラー", "日付はYYYY-MM-DD形式で入力してください。")
         return False
     try:
         float(amount_str)
     except ValueError:
-        messagebox.showwarning("入力エラー", "金額は数値で入力してください。")
+        QMessageBox.warning(None, "入力エラー", "金額は数値で入力してください。")
         return False
     return True
 
@@ -112,9 +116,11 @@ def insert_record(date, category, subject, amount):
         cursor.execute(query, (date, category, subject, amount))
         conn.commit()
         logging.info("新規レコード追加: 日付=%s, 区分=%s, 科目=%s, 金額=%s", date, category, subject, amount)
+        return True
     except sqlite3.Error as e:
         logging.error("DB挿入エラー: %s", e)
-        messagebox.showerror("エラー", "データの保存中にエラーが発生しました。詳細はログを確認してください。")
+        QMessageBox.critical(None, "エラー", "データの保存中にエラーが発生しました。詳細はログを確認してください。")
+        return False
     finally:
         if conn:
             conn.close()
@@ -132,8 +138,8 @@ def fetch_monthly_summary(month):
         conn = sqlite3.connect(DATABASE_NAME)
         df = pd.read_sql_query("SELECT * FROM kakeibo WHERE substr(date, 1, 7) = ?", conn, params=(month,))
         if df.empty:
-            messagebox.showinfo("集計結果", "指定された月のデータはありません。")
-            return
+            QMessageBox.information(None, "集計結果", "指定された月のデータはありません。")
+            return None
         income_total = df[df['category'] == '収入']['amount'].sum()
         expense_total = df[df['category'] == '支出']['amount'].sum()
         balance = income_total - expense_total
@@ -143,11 +149,13 @@ def fetch_monthly_summary(month):
             f"支出合計: {expense_total}\n"
             f"差引残高: {balance}"
         )
-        messagebox.showinfo("月次集計", summary_text)
+        # QMessageBox.information(None, "月次集計", summary_text)
         logging.info("月次集計実施: %s", summary_text)
+        return summary_text
     except Exception as e:
         logging.error("集計エラー: %s", e)
-        messagebox.showerror("エラー", "集計処理中にエラーが発生しました。詳細はログを確認してください。")
+        QMessageBox.critical(None, "エラー", "集計処理中にエラーが発生しました。詳細はログを確認してください。")
+        return None
     finally:
         if conn:
             conn.close()
@@ -164,10 +172,10 @@ def backup_database():
     try:
         shutil.copy(DATABASE_NAME, backup_filename)
         logging.info("バックアップ成功: %s", backup_filename)
-        messagebox.showinfo("バックアップ", f"バックアップが成功しました。\nファイル名: {backup_filename}")
+        QMessageBox.information(None, "バックアップ", f"バックアップが成功しました。\nファイル名: {backup_filename}")
     except Exception as e:
         logging.error("バックアップ失敗: %s", e)
-        messagebox.showerror("エラー", "バックアップ中にエラーが発生しました。")
+        QMessageBox.critical(None, "エラー", "バックアップ中にエラーが発生しました。")
 
 # -------------------------------------------------------------------
 # 7. リマインダー機能 (schedule と threading 利用)
@@ -175,7 +183,7 @@ def backup_database():
 def reminder_job():
     """リマインダーのジョブ関数。指定時刻になるとユーザーに家計簿入力を促す。"""
     logging.info("リマインダー実行: 今日の家計簿入力は済んでるかな？")
-    messagebox.showinfo("リマインダー", "今日の家計簿入力は済んでるかな？")
+    QMessageBox.information(None, "リマインダー", "今日の家計簿入力は済んでるかな？")
 
 def run_scheduler():
     """scheduleライブラリを利用して、定期的にジョブを実行するための無限ループ関数。"""
@@ -203,114 +211,274 @@ def export_to_csv(filename):
         conn = sqlite3.connect(DATABASE_NAME)
         df = pd.read_sql_query("SELECT * FROM kakeibo", conn)
         if df.empty:
-            messagebox.showwarning("エラー", "エクスポートするデータがありません")
+            QMessageBox.warning(None, "エラー", "エクスポートするデータがありません")
             return
         df.to_csv(filename, index=False, encoding='utf-8-sig')
-        messagebox.showinfo("成功", f"CSVファイルをエクスポートしました\n{filename}")
+        QMessageBox.information(None, "成功", f"CSVファイルをエクスポートしました\n{filename}")
         logging.info("CSVエクスポート成功: %s", filename)
     except Exception as e:
         logging.error("CSVエクスポートエラー: %s", e)
-        messagebox.showerror("エラー", "CSVのエクスポート中にエラーが発生しました")
+        QMessageBox.critical(None, "エラー", "CSVのエクスポート中にエラーが発生しました")
     finally:
         if conn:
             conn.close()
 
-def export_csv(self):
-    """CSVエクスポート用のファイルダイアログ表示"""
-    file_path = filedialog.asksaveasfilename(
-        defaultextension=".csv",
-        filetypes=[("CSVファイル", "*.csv"), ("すべてのファイル", "*.*")],
-        title="保存先を選択",
-        initialdir=os.path.expanduser("~")  # ホームディレクトリを初期パスに設定
-    )
-    if file_path:
-        export_to_csv(file_path)
-
 # -------------------------------------------------------------------
-# 9. GUI アプリケーション (tkinter)
+# 9. GUI アプリケーション (PyQt6)
 # -------------------------------------------------------------------
-class KakeiboApp(tk.Tk):
+class KakeiboApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.title("家計簿日報システム (仮称)")
-        self.geometry("500x400")
-        self.create_widgets()
+        self.initUI()
+        self.load_data()
 
-    def create_widgets(self):
+
+    def initUI(self):
+        self.setWindowTitle("家計簿日報システム (仮称)")
+        self.setGeometry(300, 300, 600, 400)
+
+        # タブウィジェット
+        self.tabs = QTabWidget()
+
+        # 入力タブ
+        self.input_tab = QWidget()
+        self.setup_input_tab()
+
+        # 表示タブ
+        self.view_tab = QWidget()
+        self.setup_view_tab()
+
+        # 月次集計タブ
+        self.summary_tab = QWidget()
+        self.setup_summary_tab()
+
+        self.tabs.addTab(self.input_tab, "入力")
+        self.tabs.addTab(self.view_tab, "表示・編集")
+        self.tabs.addTab(self.summary_tab, "月次集計")
+
+
+        # メインレイアウト
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(self.tabs)
+        self.setLayout(main_layout)
+
+    def setup_input_tab(self):
+        # 入力フォームのレイアウト
+        layout = QVBoxLayout()
+
         # 日付入力
-        self.lbl_date = tk.Label(self, text="日付 (YYYY-MM-DD):")
-        self.lbl_date.pack(pady=5)
-        self.entry_date = tk.Entry(self)
-        self.entry_date.pack()
-        self.entry_date.insert(0, datetime.date.today().strftime("%Y-%m-%d"))
+        date_layout = QHBoxLayout()
+        date_label = QLabel("日付 (YYYY-MM-DD):")
+        self.date_edit = QLineEdit(datetime.date.today().strftime("%Y-%m-%d"))
+        date_layout.addWidget(date_label)
+        date_layout.addWidget(self.date_edit)
+        layout.addLayout(date_layout)
 
-        # 区分 (収入/支出) の選択
-        self.lbl_category = tk.Label(self, text="区分:")
-        self.lbl_category.pack(pady=5)
-        self.category_var = tk.StringVar(self)
-        self.category_var.set("支出")
-        self.option_menu = tk.OptionMenu(self, self.category_var, "収入", "支出")
-        self.option_menu.pack()
+        # 区分 (収入/支出)
+        category_layout = QHBoxLayout()
+        category_label = QLabel("区分:")
+        self.category_combo = QComboBox()
+        self.category_combo.addItems(["支出", "収入"])
+        category_layout.addWidget(category_label)
+        category_layout.addWidget(self.category_combo)
+        layout.addLayout(category_layout)
 
         # 科目入力
-        self.lbl_subject = tk.Label(self, text="科目:")
-        self.lbl_subject.pack(pady=5)
-        self.entry_subject = tk.Entry(self)
-        self.entry_subject.pack()
+        subject_layout = QHBoxLayout()
+        subject_label = QLabel("科目:")
+        self.subject_edit = QLineEdit()
+        subject_layout.addWidget(subject_label)
+        subject_layout.addWidget(self.subject_edit)
+        layout.addLayout(subject_layout)
 
         # 金額入力
-        self.lbl_amount = tk.Label(self, text="金額:")
-        self.lbl_amount.pack(pady=5)
-        self.entry_amount = tk.Entry(self)
-        self.entry_amount.pack()
+        amount_layout = QHBoxLayout()
+        amount_label = QLabel("金額:")
+        self.amount_edit = QLineEdit()
+        amount_layout.addWidget(amount_label)
+        amount_layout.addWidget(self.amount_edit)
+        layout.addLayout(amount_layout)
 
         # 保存ボタン
-        self.btn_save = tk.Button(self, text="保存", command=self.save_record)
-        self.btn_save.pack(pady=10)
+        self.save_button = QPushButton("保存")
+        self.save_button.clicked.connect(self.save_record)
+        layout.addWidget(self.save_button)
 
-        # 月次集計ボタン
-        self.btn_summary = tk.Button(self, text="月次集計", command=self.show_monthly_summary)
-        self.btn_summary.pack(pady=5)
+        self.input_tab.setLayout(layout)
+
+    def setup_view_tab(self):
+        layout = QVBoxLayout()
+
+        # データ表示テーブル
+        self.table_widget = QTableWidget()
+        self.table_widget.setColumnCount(5)
+        self.table_widget.setHorizontalHeaderLabels(["ID", "日付", "区分", "科目", "金額"])
+        self.table_widget.itemChanged.connect(self.update_record)
+        layout.addWidget(self.table_widget)
+
+        # 更新ボタン, 削除ボタン
+        hbox = QHBoxLayout()
+        self.refresh_button = QPushButton("更新")
+        self.refresh_button.clicked.connect(self.load_data)
+        hbox.addWidget(self.refresh_button)
+
+        self.delete_button = QPushButton("削除")
+        self.delete_button.clicked.connect(self.delete_record)
+        hbox.addWidget(self.delete_button)
+
+        # CSVエクスポート
+        self.export_button = QPushButton("CSVエクスポート")
+        self.export_button.clicked.connect(self.export_csv)
+        hbox.addWidget(self.export_button)
 
         # バックアップボタン
-        self.btn_backup = tk.Button(self, text="バックアップ", command=backup_database)
-        self.btn_backup.pack(pady=5)
+        self.backup_button = QPushButton("バックアップ")
+        self.backup_button.clicked.connect(backup_database)
+        hbox.addWidget(self.backup_button)
 
-        # CSVエクスポートボタン
-        self.btn_csv = tk.Button(self, text="CSVエクスポート", command=self.export_csv)
-        self.btn_csv.pack(pady=5)
+        layout.addLayout(hbox)
+        self.view_tab.setLayout(layout)
+
+    def setup_summary_tab(self):
+        layout = QVBoxLayout()
+
+        # 月選択
+        month_layout = QHBoxLayout()
+        month_label = QLabel("月 (YYYY-MM):")
+        self.month_edit = QLineEdit(datetime.date.today().strftime("%Y-%m"))
+        month_layout.addWidget(month_label)
+        month_layout.addWidget(self.month_edit)
+
+        # 集計ボタン
+        self.summary_button = QPushButton("集計")
+        self.summary_button.clicked.connect(self.show_monthly_summary)
+        month_layout.addWidget(self.summary_button)
+
+        layout.addLayout(month_layout)
+
+        # 集計結果表示
+        self.summary_label = QLabel("")
+        layout.addWidget(self.summary_label)
+
+        self.summary_tab.setLayout(layout)
+
+    def load_data(self):
+        """DBからデータを読み込み、テーブルに表示する"""
+        conn = None
+        try:
+            conn = sqlite3.connect(DATABASE_NAME)
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM kakeibo")
+            data = cursor.fetchall()
+
+            self.table_widget.setRowCount(0)  # テーブルをクリア
+            for row_number, row_data in enumerate(data):
+                self.table_widget.insertRow(row_number)
+                for column_number, cell_data in enumerate(row_data):
+                    item = QTableWidgetItem(str(cell_data))
+                    self.table_widget.setItem(row_number, column_number, item)
+        except sqlite3.Error as e:
+            logging.error("データ読み込みエラー: %s", e)
+            QMessageBox.critical(self, "エラー", "データの読み込み中にエラーが発生しました。")
+        finally:
+            if conn:
+                conn.close()
 
     def save_record(self):
         """入力データのバリデーションとDB保存"""
-        date = self.entry_date.get()
-        category = self.category_var.get()
-        subject = self.entry_subject.get()
-        amount_str = self.entry_amount.get()
+        date = self.date_edit.text()
+        category = self.category_combo.currentText()
+        subject = self.subject_edit.text()
+        amount_str = self.amount_edit.text()
 
         if not validate_input(date, amount_str):
             return
+
         amount = float(amount_str)
-        insert_record(date, category, subject, amount)
-        messagebox.showinfo("成功", "データが保存されました！")
-        self.entry_subject.delete(0, tk.END)
-        self.entry_amount.delete(0, tk.END)
+        if insert_record(date, category, subject, amount):
+            QMessageBox.information(self, "成功", "データが保存されました！")
+            self.subject_edit.clear()
+            self.amount_edit.clear()
+            self.load_data()  # データの再読み込み
+        else:
+            QMessageBox.critical(self, "エラー", "データの保存に失敗しました")
+
+    def update_record(self, item):
+        """テーブルのセルが変更されたときにDBのレコードを更新する"""
+        row = item.row()
+        column = item.column()
+        new_value = item.text()
+        record_id = self.table_widget.item(row, 0).text()  # IDを取得
+
+        column_names = ["id", "date", "category", "subject", "amount"]
+        column_name = column_names[column]
+
+        conn = None
+        try:
+            conn = sqlite3.connect(DATABASE_NAME)
+            cursor = conn.cursor()
+            query = f"UPDATE kakeibo SET {column_name} = ? WHERE id = ?"
+            cursor.execute(query, (new_value, record_id))
+            conn.commit()
+            logging.info(f"レコード更新: ID={record_id}, 列={column_name}, 値={new_value}")
+
+            # 金額が変更された場合、数値チェックを行う
+            if column_name == "amount":
+                if not validate_input(self.table_widget.item(row,1).text(), new_value):
+                    self.load_data() # データ再読み込みで変更をもとに戻す
+                    return
+        except sqlite3.Error as e:
+            logging.error("レコード更新エラー: %s", e)
+            QMessageBox.critical(self, "エラー", "データの更新中にエラーが発生しました。")
+        finally:
+            if conn:
+                conn.close()
+
+    def delete_record(self):
+        """選択された行のレコードをDBから削除する"""
+        selected_row = self.table_widget.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "エラー", "削除する行を選択してください。")
+            return
+
+        record_id = self.table_widget.item(selected_row, 0).text()
+
+        reply = QMessageBox.question(self, "確認", "本当にこのレコードを削除しますか？",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            conn = None
+            try:
+                conn = sqlite3.connect(DATABASE_NAME)
+                cursor = conn.cursor()
+                query = "DELETE FROM kakeibo WHERE id = ?"
+                cursor.execute(query, (record_id,))
+                conn.commit()
+                logging.info("レコード削除: ID=%s", record_id)
+                self.load_data()  # データの再読み込み
+            except sqlite3.Error as e:
+                logging.error("レコード削除エラー: %s", e)
+                QMessageBox.critical(self, "エラー", "データの削除中にエラーが発生しました。")
+            finally:
+                if conn:
+                    conn.close()
 
     def show_monthly_summary(self):
-        """月次集計の実行"""
-        date = self.entry_date.get()
-        if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
-            messagebox.showwarning("入力エラー", "日付はYYYY-MM-DD形式で入力してください。")
+        month = self.month_edit.text()
+        if not re.match(r'^\d{4}-\d{2}$', month):
+            QMessageBox.warning(None, "入力エラー", "月はYYYY-MM形式で入力してください。")
             return
-        month = date[:7]
-        fetch_monthly_summary(month)
+
+        summary = fetch_monthly_summary(month)
+        if summary:
+            self.summary_label.setText(summary)
+        else:
+            self.summary_label.setText("データがありません")
 
     def export_csv(self):
         """CSVエクスポート用のファイルダイアログ表示"""
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSVファイル", "*.csv"), ("すべてのファイル", "*.*")],
-            title="保存先を選択",
-            initialdir=os.path.expanduser("~")  # ホームディレクトリを初期パスに設定
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "CSVファイル保存", os.path.expanduser("~"),
+            "CSVファイル (*.csv);;すべてのファイル (*.*)"
         )
         if file_path:
             export_to_csv(file_path)
@@ -320,10 +488,12 @@ class KakeiboApp(tk.Tk):
 # -------------------------------------------------------------------
 def main():
     """システムの初期化と起動"""
+    app = QApplication(sys.argv)
     initialize_database()
     start_scheduler_thread()
-    app = KakeiboApp()
-    app.mainloop()
+    ex = KakeiboApp()
+    ex.show()
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
