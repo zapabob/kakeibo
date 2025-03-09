@@ -36,12 +36,23 @@ from PyQt6.QtWidgets import (
 
 # システムのロケールを設定（日本語Windows環境向け）
 try:
-    locale.setlocale(locale.LC_ALL, 'ja_JP.UTF-8')
+    # Python 3.11以降では推奨される方法
+    if sys.version_info >= (3, 11):
+        locale.setlocale(locale.LC_ALL, '')
+        sys_encoding = locale.getencoding()
+        sys_locale = locale.getlocale()
+    else:
+        # 3.10以前の方法
+        locale.setlocale(locale.LC_ALL, 'ja_JP.UTF-8')
 except locale.Error:
     try:
         locale.setlocale(locale.LC_ALL, 'Japanese_Japan.932')
     except locale.Error:
+        # どのロケールも設定できない場合はデフォルトを使用
         pass
+
+# Python 3.12対応のためにioencoding環境変数を設定
+os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # 必要なモジュールの確認とインストール案内
 try:
@@ -547,15 +558,14 @@ def main():
     try:
         # Windows日本語環境のための設定
         os.environ['QT_QPA_PLATFORM'] = 'windows'
-        # 日本語ロケール設定 (Windows10環境)
-        os.environ["PYTHONIOENCODING"] = "utf-8"
         
-        # Python 3.7以降でのみサポートされるreconfigureメソッド
-        if sys.version_info >= (3, 7):
+        # Python 3.10以降のreconfigureメソッドの使用
+        if sys.version_info >= (3, 10):
             try:
                 sys.stdin.reconfigure(encoding='utf-8')
                 sys.stdout.reconfigure(encoding='utf-8')
-            except AttributeError:
+            except (AttributeError, RuntimeError):
+                # 3.12では一部環境でエラーになることがある
                 pass
         
         app = QApplication(sys.argv)
@@ -570,8 +580,15 @@ def main():
         ex = KakeiboApp()
         ex.show()
         
-        # アプリケーションの実行
-        sys.exit(app.exec())
+        # アプリケーションの実行 - PyQt6のバージョンに応じた対応
+        # Python 3.10-3.12対応
+        try:
+            # PyQt 6.4.0以降（Python 3.11-3.12推奨）
+            sys.exit(app.exec())
+        except AttributeError:
+            # 古いバージョンのPyQt6（Python 3.10）
+            sys.exit(app.exec_())
+            
     except Exception as e:
         logging.error(f"実行エラー: {e}")
         print(f"エラーが発生しました: {e}")

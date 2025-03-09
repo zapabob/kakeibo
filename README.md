@@ -13,18 +13,23 @@
 - CSVエクスポート機能 (新規追加)
 
 ## 動作環境
-- Python 3.x
+- Python 3.10-3.12（推奨: Python 3.12）
 - SQLite
-- pandas
-- PyQt6
-- schedule
+- pandas 2.0.0以上
+- PyQt6 6.4.0以上
+- schedule 1.2.0以上
 
 ## インストール
 以下の手順で環境をセットアップします。
 
 1. 必要なパッケージをインストールします：
    ```sh
-   pip install PyQt6 pandas schedule
+   pip install -r requirements.txt
+   ```
+
+   または個別にインストール：
+   ```sh
+   pip install PyQt6>=6.4.0 pandas>=2.0.0 schedule>=1.2.0
    ```
 
 ## 起動方法
@@ -45,6 +50,14 @@
    ```sh
    py -3 kakeibo.py
    ```
+
+### VSCodeでの実行（Code Runner使用）
+1. VSCodeでkakeibo.pyを開きます
+2. 右クリックして「Run Code」を選択するか、Ctrl+Alt+Nを押します
+3. 出力ウィンドウに結果が表示されます
+
+### 動作確認
+テスト用のスクリプト `test_runner.py` を実行して、Python環境と日本語表示が正常かどうかを確認できます。
 
 ### 主な機能
 - **データの入力**：日付、区分、科目、金額を入力して保存
@@ -74,6 +87,13 @@
    ```
 
 3. ログファイル（kakeibo.log）を確認して、エラーの詳細を確認してください。
+
+### Code Runnerのエラー
+VSCodeのCode Runnerプラグインで「指定されたパスが見つかりません」エラーが表示される場合：
+
+1. `.vscode/settings.json` ファイルが存在することを確認
+2. VSCodeを再起動
+3. `test_runner.py` を実行して動作確認
 
 ## 貢献
 バグ報告や機能リクエストは、[Issues](https://github.com/zapabob/kakeibo/issues) からお願いします。
