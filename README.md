@@ -1,4 +1,3 @@
-
 # 家計簿日報システム (仮称)
 
 ## 概要
@@ -19,31 +18,32 @@
 - pandas
 - PyQt6
 - schedule
-- その他の必要なパッケージは `requirements.txt` を参照してください
 
 ## インストール
 以下の手順で環境をセットアップします。
 
-1. リポジトリをクローンします：
+1. 必要なパッケージをインストールします：
    ```sh
-   git clone https://github.com/zapabob/kakeibo.git
-   cd kakeibo
+   pip install PyQt6 pandas schedule
    ```
 
-2. 必要なパッケージをインストールします：
-   ```sh
-   pip install -r requirements.txt
-   ```
+## 起動方法
 
-## 使い方
-1. データベースを初期化します：
-   ```sh
-   python kakeibo.py --init-db
-   ```
-   
-2. アプリケーションを起動します：
+### Windowsの場合
+1. `run_kakeibo.bat` ファイルをダブルクリックして実行します。
+   - 自動的にPythonを検出して実行します。
+   - エラーが発生した場合は、必要なライブラリのインストール方法が表示されます。
+
+### 手動での起動
+1. コマンドプロンプトまたはPowerShellを開き、以下のコマンドを実行します：
    ```sh
    python kakeibo.py
+   ```
+   
+   または
+   
+   ```sh
+   py -3 kakeibo.py
    ```
 
 ### 主な機能
@@ -56,6 +56,24 @@
 ## 注意事項
 - データベースファイルはアプリケーションのディレクトリに `kakeibo.db` という名前で保存されます。
 - エラーハンドリングとログ出力のために `kakeibo.log` ファイルが生成されます。
+- 初回起動時に必要なファイルが自動的に作成されます。
+
+## トラブルシューティング
+
+### 起動しない場合
+1. 必要なライブラリがインストールされているか確認：
+   ```sh
+   pip list | findstr PyQt6
+   pip list | findstr pandas 
+   pip list | findstr schedule
+   ```
+
+2. 不足しているライブラリをインストール：
+   ```sh
+   pip install PyQt6 pandas schedule
+   ```
+
+3. ログファイル（kakeibo.log）を確認して、エラーの詳細を確認してください。
 
 ## 貢献
 バグ報告や機能リクエストは、[Issues](https://github.com/zapabob/kakeibo/issues) からお願いします。

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
@@ -26,29 +26,80 @@ import re
 import os
 import shutil
 import sys
-from PyQt6 import QtWidgets, QtGui, QtCore
+import traceback
+import locale
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget,
     QFileDialog, QMessageBox
 )
 
+# システムのロケールを設定（日本語Windows環境向け）
+try:
+    locale.setlocale(locale.LC_ALL, 'ja_JP.UTF-8')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_ALL, 'Japanese_Japan.932')
+    except locale.Error:
+        pass
+
+# 必要なモジュールの確認とインストール案内
+try:
+    import pandas as pd
+except ImportError:
+    print("pandas モジュールがインストールされていません。")
+    print("インストール方法: pip install pandas")
+    sys.exit(1)
+
+try:
+    import schedule
+    import threading
+except ImportError:
+    print("schedule モジュールがインストールされていません。")
+    print("インストール方法: pip install schedule")
+    sys.exit(1)
+
+try:
+    from PyQt6.QtWidgets import (
+        QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+        QComboBox, QPushButton, QTableWidget, QTableWidgetItem, QTabWidget,
+        QFileDialog, QMessageBox
+    )
+except ImportError:
+    print("PyQt6 モジュールがインストールされていません。")
+    print("インストール方法: pip install PyQt6")
+    sys.exit(1)
+
 # -------------------------------------------------------------------
 # 1. ログ設定
 # -------------------------------------------------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    filename="kakeibo.log",
-    filemode="a"
-)
-logging.info("家計簿日報システム 起動")
+try:
+    log_dir = os.path.dirname(os.path.abspath(__file__))
+    log_file = os.path.join(log_dir, "kakeibo.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        filename=log_file,
+        filemode="a",
+        encoding="utf-8"
+    )
+    logging.info("家計簿日報システム 起動")
+except Exception as e:
+    print(f"ログ設定エラー: {e}")
+    traceback.print_exc()
 
 # データベースファイル名
 if getattr(sys, 'frozen', False):
-    DATABASE_NAME = os.path.join(sys._MEIPASS, "kakeibo.db")
+    # 実行可能ファイルとして実行されている場合
+    app_dir = os.path.dirname(sys.executable)
+    DATABASE_NAME = os.path.join(app_dir, "kakeibo.db")
 else:
-    DATABASE_NAME = "kakeibo.db"
+    # スクリプトとして実行されている場合
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    DATABASE_NAME = os.path.join(app_dir, "kakeibo.db")
+
+# データベースディレクトリの確認と作成
+os.makedirs(os.path.dirname(DATABASE_NAME), exist_ok=True)
 
 # -------------------------------------------------------------------
 # 2. データベース初期化
@@ -61,6 +112,11 @@ def initialize_database():
     """
     conn = None
     try:
+        # データベースディレクトリの確認
+        db_dir = os.path.dirname(DATABASE_NAME)
+        if not os.path.exists(db_dir) and db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+            
         conn = sqlite3.connect(DATABASE_NAME)
         cursor = conn.cursor()
         cursor.execute("""
@@ -73,7 +129,7 @@ def initialize_database():
             )
         """)
         conn.commit()
-        logging.info("データベース初期化完了")
+        logging.info(f"データベース初期化完了: {DATABASE_NAME}")
     except sqlite3.Error as e:
         logging.error("DB初期化エラー: %s", e)
         QMessageBox.critical(None, "エラー", "データベースの初期化に失敗しました。")
@@ -488,12 +544,49 @@ class KakeiboApp(QWidget):
 # -------------------------------------------------------------------
 def main():
     """システムの初期化と起動"""
-    app = QApplication(sys.argv)
-    initialize_database()
-    start_scheduler_thread()
-    ex = KakeiboApp()
-    ex.show()
-    sys.exit(app.exec())
+    try:
+        # Windows日本語環境のための設定
+        os.environ['QT_QPA_PLATFORM'] = 'windows'
+        # 日本語ロケール設定 (Windows10環境)
+        os.environ["PYTHONIOENCODING"] = "utf-8"
+        
+        # Python 3.7以降でのみサポートされるreconfigureメソッド
+        if sys.version_info >= (3, 7):
+            try:
+                sys.stdin.reconfigure(encoding='utf-8')
+                sys.stdout.reconfigure(encoding='utf-8')
+            except AttributeError:
+                pass
+        
+        app = QApplication(sys.argv)
+        
+        # データベース初期化
+        initialize_database()
+        
+        # スケジューラースレッド開始
+        start_scheduler_thread()
+        
+        # アプリケーションウィンドウの表示
+        ex = KakeiboApp()
+        ex.show()
+        
+        # アプリケーションの実行
+        sys.exit(app.exec())
+    except Exception as e:
+        logging.error(f"実行エラー: {e}")
+        print(f"エラーが発生しました: {e}")
+        traceback.print_exc()
+        
+        # GUIが起動していない場合に備えてコンソールにもメッセージを表示
+        print("予期せぬエラーが発生しました。詳細はログファイルを確認してください。")
+        print("ログファイル: " + os.path.join(os.path.dirname(os.path.abspath(__file__)), "kakeibo.log"))
+        
+        try:
+            QMessageBox.critical(None, "エラー", f"予期せぬエラーが発生しました: {e}")
+        except:
+            pass
+        
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
